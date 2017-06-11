@@ -13,8 +13,6 @@ const BLACK: [f32; 4]  = [0.0, 0.0, 0.0, 1.0];
 const BLUE: [f32; 4] = [0.0, 0.82, 0.96, 1.0];
 const SCREEN_WIDTH: usize = 70;
 const SCREEN_HEIGHT: usize = 70;
-const MENU_STRING: &'static str = "ENTER: RANDOM GAME ESC: EXIT";
-
 
 #[derive(Debug, Copy, Clone)]
 struct block {
@@ -32,8 +30,9 @@ impl Default for block {
 // Not used right now, will eventually implement ability to reset and pause game
 #[derive(Copy, Clone, PartialEq)]
 enum game {
-    Stopped,
-    Started,
+    Menu,
+    Running,
+    Custom,
     Paused
 }
 
@@ -79,7 +78,7 @@ impl Clone for screen {
 impl screen {
     fn new() -> screen { // Create new, blank screen object
         let pixel: block = Default::default();
-        screen { buffer: [[pixel; SCREEN_WIDTH]; SCREEN_HEIGHT], game_state: game::Stopped }
+        screen { buffer: [[pixel; SCREEN_WIDTH]; SCREEN_HEIGHT], game_state: game::Menu }
     }
 
     fn random(&mut self) -> &mut Self { // Populate game board with random seed
@@ -89,6 +88,12 @@ impl screen {
                 j.state = rng.gen_range(0,2);
             }
         }
+        self
+    }
+
+    fn clear_buffer(&mut self) -> &mut Self { // Clear the game board while keeping screen state
+        let pixel: block = Default::default();
+        self.buffer = [[pixel; SCREEN_WIDTH]; SCREEN_HEIGHT];
         self
     }
 
@@ -148,11 +153,15 @@ fn main() {
     let factory = window.factory.clone();
     let mut glyphs = Glyphs::new(font, factory).unwrap();
     let mut main_menu: menu = menu::new();
+
+    // Game drawing stuff
+    let mut cursor = [0.0, 0.0];
+    let mut draw_flag = false;
+    let mut erase_flag = false;
     
     while let Some(e) = window.next() {
 
-
-        if board.game_state == game::Stopped {
+        if board.game_state == game::Menu {
 
             if let Some(Button::Keyboard(key)) = e.press_args() {
                // println!("{:?}",key);
@@ -162,9 +171,10 @@ fn main() {
                                    else { main_menu.selection -= 1; } },
                     Key::Down => { if main_menu.selection == 2 { main_menu.selection = 2;}
                                    else {main_menu.selection += 1; } },
-                    Key::Return => match main_menu.selection { 0 => {board.game_state = game::Started; board.random();},
-                                                              1 => board.game_state = game::Stopped,
-                                                              2 => board.game_state = game::Stopped,
+                    Key::Return => match main_menu.selection { 0 => {board.game_state = game::Running; board.random();},
+                                                               1 => {board.game_state = game::Custom; board.clear_buffer();
+                                                                     window.draw_2d(&e, |c, g| { clear([1.0; 4], g)});},
+                                                              2 => board.game_state = game::Menu,
                                                               _ => panic!("Game in wrong state")},
                     _ => {}
                 }
@@ -207,7 +217,7 @@ fn main() {
                     transform, g);
             });
             
-        } else if board.game_state == game::Started {
+        } else if board.game_state == game::Running {
 
             let board_temp = board;
         
@@ -225,6 +235,65 @@ fn main() {
             }
         
             board.update_board();
+            
+        } else if board.game_state == game::Custom {
+            window.draw_2d(&e, |c, g| { clear([1.0; 4], g)});
+            
+            e.mouse_cursor(|x, y| {cursor = [x, y];});
+            
+            if let Some(Button::Mouse(button)) = e.press_args() {
+                match button {
+                    MouseButton::Left => {
+                        draw_flag = true;
+                        //let xloc = cursor[0] as i16 / 10;
+                        //let yloc = cursor[1] as i16 / 10;
+                        //board.buffer[xloc as usize][yloc as usize].state = 1;
+                        println!("Something {:?}", cursor);
+                    },
+                    MouseButton::Right => {
+                        erase_flag = true;
+                    },
+                    _ => {println!("nothing");}
+                }
+            }
+            if let Some(Button::Mouse(button)) = e.release_args() {
+                match button {
+                    MouseButton::Left => draw_flag = false,
+                    MouseButton::Right => erase_flag = false,
+                    _ => {}
+                }
+            }
+
+            let xloc = cursor[0] as usize / 10;
+            let yloc = cursor[1] as usize /10;
+            
+            if draw_flag && erase_flag {
+                erase_flag = false;
+            }
+            
+            if draw_flag {
+                board.buffer[xloc][yloc].state = 1;
+            } else if erase_flag {
+                board.buffer[xloc][yloc].state = 0;
+            }
+            
+            for (x, i) in board.buffer.iter().enumerate() {
+                for (y, j) in i.iter().enumerate() {
+                
+                     if j.state != 0 {
+                        window.draw_2d(&e, |c, g| {rectangle(BLACK, [(x as f64)*10.0, (y as f64)*10.0, 10.0, 10.0], c.transform, g);});  
+                    } 
+                }
+            }
+
+            if let Some(Button::Keyboard(key)) = e.press_args() {
+                match key {
+                    Key::Return => board.game_state = game::Running,
+                    _ => {}
+                }
+            }
+            
+            println!("{:?}", cursor);
         } else if board.game_state == game::Paused {
             //TODO
         }

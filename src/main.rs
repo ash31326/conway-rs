@@ -12,7 +12,7 @@ use std::{thread, time};
 const BLACK: [f32; 4]  = [0.0, 0.0, 0.0, 1.0];
 const BLUE: [f32; 4] = [0.0, 0.82, 0.96, 1.0];
 const SCREEN_WIDTH: usize = 70;
-const SCREEN_HEIGHT: usize = 70;
+const SCREEN_HEIGHT: usize = 67;
 
 #[derive(Debug, Copy, Clone)]
 struct block {
@@ -44,7 +44,10 @@ struct menu {
     option2_color: [f32; 4],
     option3: &'static str,
     option3_color: [f32; 4],
-    selection: u8 // may be a better way to do this but just going to use a match on the u8
+    selection: u8,
+    home_help: &'static str,
+    custom_help: &'static str,
+    running_help: &'static str
 }
 
 impl menu {
@@ -52,7 +55,9 @@ impl menu {
         menu { title: "CONWAY-RS", option1: "RANDOM GAME", option1_color: BLUE,
                option2: "CUSTOM GAME", option2_color: BLACK,
                option3: "ABOUT", option3_color: BLACK,
-               selection: 0 }
+               selection: 0, home_help: "UP/DOWN: MOVE --- ENTER: SELECT",
+               custom_help: "LEFT MOUSE: DRAW --- RIGHT MOUSE: ERASE --- ENTER: START --- ESC: OPEN MENU",
+               running_help: "GAME IS RUNNING --- PRESS ESC TO OPEN MENU"}
     }
     fn selection_change(&mut self) -> &mut Self {
         match self.selection {
@@ -67,7 +72,7 @@ impl menu {
 
 #[derive(Copy)]
 struct screen {
-    buffer: [[block; SCREEN_WIDTH]; SCREEN_HEIGHT],
+    buffer: [[block; SCREEN_HEIGHT]; SCREEN_WIDTH],
     game_state: game
 }
 
@@ -78,7 +83,7 @@ impl Clone for screen {
 impl screen {
     fn new() -> screen { // Create new, blank screen object
         let pixel: block = Default::default();
-        screen { buffer: [[pixel; SCREEN_WIDTH]; SCREEN_HEIGHT], game_state: game::Menu }
+        screen { buffer: [[pixel; SCREEN_HEIGHT]; SCREEN_WIDTH], game_state: game::Menu }
     }
 
     fn random(&mut self) -> &mut Self { // Populate game board with random seed
@@ -93,7 +98,7 @@ impl screen {
 
     fn clear_buffer(&mut self) -> &mut Self { // Clear the game board while keeping screen state
         let pixel: block = Default::default();
-        self.buffer = [[pixel; SCREEN_WIDTH]; SCREEN_HEIGHT];
+        self.buffer = [[pixel; SCREEN_HEIGHT]; SCREEN_WIDTH];
         self
     }
 
@@ -149,15 +154,20 @@ fn main() {
     EventLoop::set_max_fps(&mut window, 10);
 
     let assets = find_folder::Search::ParentsThenKids(3, 3).for_folder("assets").unwrap();
-    let ref font = assets.join("PressStart2P.ttf");
-    let factory = window.factory.clone();
-    let mut glyphs = Glyphs::new(font, factory).unwrap();
+    //let ref menu_font = assets.join("PressStart2P.ttf");
+    let ref menu_font = assets.join("Retro Computer_DEMO.ttf");
+    let ref help_font = assets.join("VCR_OSD_MONO_1.001.ttf");
+    let factory_menu = window.factory.clone();
+    let factory_help = window.factory.clone();
+    let mut menu_glyphs = Glyphs::new(menu_font, factory_menu).unwrap();
+    let mut help_glyphs = Glyphs::new(help_font, factory_help).unwrap();
     let mut main_menu: menu = menu::new();
 
-    // Game drawing stuff
+    // Game flags / variables
     let mut cursor = [0.0, 0.0];
     let mut draw_flag = false;
     let mut erase_flag = false;
+    let mut generation: u64 = 0; // generation counter
     
     while let Some(e) = window.next() {
 
@@ -183,46 +193,70 @@ fn main() {
             main_menu.selection_change();
             
             window.draw_2d(&e, |c, g| {
-                let transform = c.transform.trans(140.0, 100.0);
+                let transform = c.transform.trans(170.0, 100.0);
                 // Set a white background
                 clear([1.0; 4], g);
-                text::Text::new_color(BLACK, 32).draw(
+                text::Text::new_color(BLACK, 46).round().draw(
                     main_menu.title,
-                    &mut glyphs,
+                    &mut menu_glyphs,
                     &c.draw_state,
                     transform, g);
             });
             window.draw_2d(&e, |c, g| {
-                let transform = c.transform.trans(190.0, 350.0);
-                text::Text::new_color(main_menu.option1_color, 20).draw(
+                let transform = c.transform.trans(200.0, 350.0);
+                text::Text::new_color(main_menu.option1_color, 30).round().draw(
                     main_menu.option1,
-                    &mut glyphs,
+                    &mut menu_glyphs,
                     &c.draw_state,
                     transform, g);
             });
             window.draw_2d(&e, |c, g| {
-                let transform = c.transform.trans(190.0, 450.0);
-                text::Text::new_color(main_menu.option2_color, 20).draw(
+                let transform = c.transform.trans(200.0, 450.0);
+                text::Text::new_color(main_menu.option2_color, 30).round().draw(
                     main_menu.option2,
-                    &mut glyphs,
+                    &mut menu_glyphs,
                     &c.draw_state,
                     transform, g);
             });
             window.draw_2d(&e, |c, g| {
                 let transform = c.transform.trans(280.0, 550.0);
-                text::Text::new_color(main_menu.option3_color, 20).draw(
+                text::Text::new_color(main_menu.option3_color, 30).round().draw(
                     main_menu.option3,
-                    &mut glyphs,
+                    &mut menu_glyphs,
                     &c.draw_state,
                     transform, g);
             });
             
+            window.draw_2d(&e, |c, g| {
+                let transform = c.transform.trans(30.0, 690.0);
+                text::Text::new_color(BLACK, 9).round().draw(
+                    main_menu.home_help,
+                    &mut help_glyphs,
+                    &c.draw_state,
+                    transform, g);});
+            
         } else if board.game_state == game::Running {
-
+            
             let board_temp = board;
         
-            window.draw_2d(&e, |c, g| { clear([1.0; 4], g) });
-        
+            window.draw_2d(&e, |c, g| { clear([1.0; 4], g);
+                let transform = c.transform.trans(30.0, 690.0);
+                text::Text::new_color(BLACK, 9).round().draw(
+                    main_menu.running_help,
+                    &mut help_glyphs,
+                    &c.draw_state,
+                    transform, g);});
+
+            // draw generation counter
+            let generation_counter = format!("Generation: {:}", generation);
+            window.draw_2d(&e, |c, g| {
+                let transform = c.transform.trans(530.0, 690.0);
+                text::Text::new_color(BLACK, 9).round().draw(
+                    &generation_counter,
+                    &mut help_glyphs,
+                    &c.draw_state,
+                    transform, g);});
+            
             for (x, i) in board_temp.buffer.iter().enumerate() {
                 for (y, j) in i.iter().enumerate() {
                 
@@ -235,9 +269,17 @@ fn main() {
             }
         
             board.update_board();
+            generation += 1;
             
         } else if board.game_state == game::Custom {
-            window.draw_2d(&e, |c, g| { clear([1.0; 4], g)});
+            
+            window.draw_2d(&e, |c, g| { clear([1.0; 4], g);
+                let transform = c.transform.trans(30.0, 690.0);
+                text::Text::new_color(BLACK, 9).round().draw(
+                    main_menu.custom_help,
+                    &mut help_glyphs,
+                    &c.draw_state,
+                    transform, g);});
             
             e.mouse_cursor(|x, y| {cursor = [x, y];});
             
@@ -245,9 +287,6 @@ fn main() {
                 match button {
                     MouseButton::Left => {
                         draw_flag = true;
-                        //let xloc = cursor[0] as i16 / 10;
-                        //let yloc = cursor[1] as i16 / 10;
-                        //board.buffer[xloc as usize][yloc as usize].state = 1;
                         println!("Something {:?}", cursor);
                     },
                     MouseButton::Right => {
@@ -264,8 +303,18 @@ fn main() {
                 }
             }
 
-            let xloc = cursor[0] as usize / 10;
-            let yloc = cursor[1] as usize /10;
+            let mut xloc = cursor[0] as usize / 10;
+            let mut yloc = cursor[1] as usize / 10;
+
+
+            // prevent cursor loc from indexing screen buffer out of bounds when drawing/erasing
+            if xloc >= SCREEN_WIDTH {
+                xloc = SCREEN_WIDTH - 1
+            }
+
+            if yloc >= SCREEN_HEIGHT {
+                yloc = SCREEN_HEIGHT - 1
+            }
             
             if draw_flag && erase_flag {
                 erase_flag = false;

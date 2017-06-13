@@ -59,9 +59,9 @@ impl menu {
                option2: "CUSTOM GAME", option2_color: BLACK,
                option3: "ABOUT", option3_color: BLACK,
                option4: "QUIT", option4_color: BLACK,
-               selection: 0, home_help: "UP/DOWN: MOVE --- ENTER: SELECT",
-               custom_help: "LEFT MOUSE: DRAW --- RIGHT MOUSE: ERASE --- ENTER: START --- ESC: OPEN MENU",
-               running_help: "GAME IS RUNNING --- PRESS ESC TO OPEN MENU"}
+               selection: 0, home_help: "UP/DOWN: MOVE - ENTER: SELECT",
+               custom_help: "LEFT/RIGHT MOUSE: DRAW/ERASE - ENTER: START - ESC: MENU",
+               running_help: "GAME IS RUNNING - PRESS ESC TO OPEN MENU"}
     }
     fn selection_change(&mut self) -> &mut Self {
         match self.selection {
@@ -69,7 +69,7 @@ impl menu {
             1 => { self.option1_color = BLACK; self.option2_color = BLUE; self.option3_color = BLACK; self.option4_color = BLACK; },
             2 => { self.option1_color = BLACK; self.option2_color = BLACK; self.option3_color = BLUE; self.option4_color = BLACK; },
             3 => { self.option1_color = BLACK; self.option2_color = BLACK; self.option3_color = BLACK; self.option4_color = BLUE; },
-            _ => panic!("Wrong selection value happened somehow")
+            _ => { self.option1_color = BLACK; self.option2_color = BLACK; self.option3_color = BLACK; self.option4_color = BLACK; }
         }
         self
     }
@@ -175,6 +175,8 @@ fn main() {
     let mut draw_flag = false;
     let mut erase_flag = false;
     let mut generation: u64 = 0; // generation counter
+    let mut xloc: usize = 0;
+    let mut yloc: usize = 0;
     
     while let Some(e) = window.next() {
 
@@ -315,6 +317,24 @@ fn main() {
                     transform, g);});
             
             e.mouse_cursor(|x, y| {cursor = [x, y];});
+            let mut xloc_string = format!("X: {:}", xloc);
+            let mut yloc_string = format!("Y: {:}", yloc);
+            
+            window.draw_2d(&e, |c, g| {
+                let transform = c.transform.trans(590.0, 690.0);
+                text::Text::new_color(BLACK, 9).round().draw(
+                    &xloc_string,
+                    &mut help_glyphs,
+                    &c.draw_state,
+                    transform, g);});
+            
+            window.draw_2d(&e, |c, g| {
+                let transform = c.transform.trans(640.0, 690.0);
+                text::Text::new_color(BLACK, 9).round().draw(
+                    &yloc_string,
+                    &mut help_glyphs,
+                    &c.draw_state,
+                    transform, g);});
             
             if let Some(Button::Mouse(button)) = e.press_args() {
                 match button {
@@ -336,15 +356,19 @@ fn main() {
                 }
             }
 
-            let mut xloc = cursor[0] as usize / 10;
-            let mut yloc = cursor[1] as usize / 10;
-
-
+            // fixes float to usize cast when float is negative
+            cursor[0] = if cursor[0] < 0.0 { 0.0 } else { cursor[0] };
+            cursor[1] = if cursor[1] < 0.0 { 0.0 } else { cursor[1] };
+            
+            xloc = cursor[0] as usize / 10;
+            yloc = cursor[1] as usize / 10;
+            
+            
             // prevent cursor loc from indexing screen buffer out of bounds when drawing/erasing
             if xloc >= SCREEN_WIDTH {
                 xloc = SCREEN_WIDTH - 1
             }
-
+            
             if yloc >= SCREEN_HEIGHT {
                 yloc = SCREEN_HEIGHT - 1
             }
